@@ -1,0 +1,105 @@
+variables:
+  APPNAME_SHORT: solana
+  REGISTRY_PROJECT: zubrdevops/solana
+  ARTIFACTS_PATH: dev-solana-artifacts
+  RPM_DEB_REPO_PATH: dev-solana-apt
+
+  BIN_NAME: solana-validator
+  BUILD_IMAGE: $REGISTRY_PROJECT:build-$CI_COMMIT_REF_SLUG
+  CARGO_HOME: /cache/solana/.cargo
+  CARGO_TARGET_DIR: "/cache/solana/$CI_COMMIT_REF_SLUG/$CI_JOB_NAME"
+  CARGO_TARGET_DIR_MASTER: "/cache/solana/master/$CI_JOB_NAME"
+
+stages:
+  - pre_build
+#  - lint
+#  - test
+  - build_version
+  - build_artifact
+  - build
+  - build_deb
+  - deploy_dev
+  - ready_sbx
+  - notify
+
+include:
+  - project: 'shared/tasks'
+    ref: master
+    file: 'vars/default-zubr.yml'
+  - project: 'shared/tasks'
+    ref: master
+    file: 'vars/upver-tag-naming.yml'
+  - project: 'shared/tasks'
+    ref: master
+    file: 'notify/up-version.yml'
+  - project: 'shared/tasks'
+    ref: master
+    file: 'notify/send-failed.yml'
+  - project: 'shared/tasks'
+    ref: 'master'
+    file: 'deploy/ready-sbx.yml'                            #ready_sbx
+  - project: 'shared/tasks'
+    ref: 'master'
+    file: 'deb/build_rust_app.yml'                          #build_deb
+
+create_build_image:
+  stage: pre_build
+  image: docker
+  tags: [docker_19_nocache]
+  before_script:
+    - docker login -u $REGISTRY_LOGIN -p $REGISTRY_PASS
+  script:
+    - docker pull $REGISTRY_PROJECT:build-master || true
+    - docker build --cache-from $REGISTRY_PROJECT:build-master --pull -t $BUILD_IMAGE -f Dockerfile.build .
+    - docker push $BUILD_IMAGE
+    - echo "Pushed $BUILD_IMAGE"
+
+clear_cache:
+  stage: pre_build
+  image: docker
+  when: manual
+  tags: [docker_19_cache]
+  script:
+    - rm -rf /cache/broker/$CI_COMMIT_REF_SLUG
+
+build_artifact:
+  stage: build_artifact
+  image: $BUILD_IMAGE
+  tags: [docker_19_cache]
+  variables:
+    UPLOAD_ARTIFACT: "rpm-source.tar.gz"
+  before_script:
+    - "[ ! -d $CARGO_TARGET_DIR ] && if [ -d $CARGO_TARGET_DIR_MASTER ]; then mkdir -p $CARGO_TARGET_DIR && cp -rp $CARGO_TARGET_DIR_MASTER $CARGO_TARGET_DIR; else mkdir -p $CARGO_TARGET_DIR; fi"
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+  script:
+    - cd validator
+    - cargo build --release
+    - echo $CARGO_TARGET_DIR
+    - mkdir -p artifact/usr/sbin
+    - ls -la $CARGO_TARGET_DIR
+    - cp $CARGO_TARGET_DIR/release/$BIN_NAME artifact/usr/sbin/
+    - ls -la artifact/usr/sbin/
+    - du artifact
+    - tar -czf ../$UPLOAD_ARTIFACT artifact
+  artifacts:
+    paths:
+      - ./${UPLOAD_ARTIFACT}
+    expire_in: 1 day
+
+Deploy DEB to Dev:
+  stage: deploy_dev
+  tags:
+    - deploy_rpm_dev
+  script:
+    - find . -mindepth 1 -maxdepth 1 -exec rm -rf {} \;
+    - git clone https://git.zubr.dev/shared/ci-scripts.git
+    - chmod 0700 ci-scripts/deploy_deb.sh
+    - ci-scripts/deploy_deb.sh DEV
+#  only:
+#    - develop
+#    - master
+#    - tags
+#    - web

@@ -80,3 +80,7 @@ exclude = [
 
 [profile.dev]
 split-debuginfo = "unpacked"
+
+
+[patch.crates-io]
+parity-ws = { git = "https://github.com/polachok/ws-rs", branch = "0.10-per-tick" }

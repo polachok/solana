@@ -2746,9 +2746,8 @@ dependencies = [
 
 [[package]]
 name = "parity-ws"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e02a625dd75084c2a7024f07c575b61b782f729d18702dabb3cdbf31911dc61"
+version = "0.10.1"
+source = "git+https://github.com/polachok/ws-rs?branch=0.10-per-tick#2d94a5e157afcd13197f798361b9af44dfc9e959"
 dependencies = [
  "byteorder",
  "bytes 0.4.12",

@@ -83,4 +83,4 @@ split-debuginfo = "unpacked"
 
 
 [patch.crates-io]
-parity-ws = { git = "https://github.com/polachok/ws-rs", branch = "0.10-per-tick" }
+parity-ws = { git = "https://github.com/polachok/ws-rs", rev = "21174765fda1f4476708bee9d70e368da5e4cbac" }
